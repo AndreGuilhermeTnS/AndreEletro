@@ -1,2 +1,28 @@
 # AndreEletro
-Storages needs to control products, storage and replacement of goods in a simple way, and not relying on manual controls. The main goal of this project, is to develop a websystem to register products, stock control and register purchases.
+Logistics and stock control system for small commerces
+
+## Goals
+
+Register products, stockcontrol and managing requests and purchases
+
+#Technology
+
+- React
+- Node.js
+- Express
+- PostgreSQL
+- Git
+- GitHub
+
+#Functionalitys
+
+Registering Products
+Stock Control
+Purchases
+
+Login
+Logout
+CRUD of products
+Stock control
+Requests
+Dashboard

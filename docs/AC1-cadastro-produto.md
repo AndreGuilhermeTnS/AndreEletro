@@ -1,31 +1,31 @@
-# AC1 - Registering Products
+# AC1 - Registrando produtos
 
-## User Story
-As a market owner, I need to register products, so i can have stock control
+## História do usuário
+Como dono de um negócio do varejo, preciso fazer o registro e controle de estoque dos produtos
 
-## Acceptance Criteria
+## Critérios de aceitação
 
-- []Register product Name
-- []Register SKU
-- [] Register Category
-- [] Register Price
-- [] Register initial stock
-- [] Register minimal stock
-- [] Validate data
-- [] Save product in database
-- [] Shows a success message
+- []Registrar o nome do produto
+- []Registrar SKU 
+- [] Registrar categoria
+- [] Registrar preço
+- [] Registrar estoque inicial
+- [] Registrar estoque mínimo
+- [] Validar dados
+- [] Salvar o produto no banco de dados
+- [] Demonstrar mensagem de sucesso
 
 ## Frontend
 
-Product register interface
+Interface de registro de produto
 
 ## Backend
 
-Endpoint responsible to register the products
+Endpoint responsável por registrar os produtos
 
-## Database
+## Banco de dados
 
-Table "Product"
+Tabela "Produtos"
 
 ## Workflow
 

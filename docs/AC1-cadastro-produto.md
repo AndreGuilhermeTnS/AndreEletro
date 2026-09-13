@@ -5,15 +5,15 @@ Como dono de um negócio do varejo, preciso fazer o registro e controle de estoq
 
 ## Critérios de aceitação
 
-- []Registrar o nome do produto
-- []Registrar SKU 
-- [] Registrar categoria
-- [] Registrar preço
-- [] Registrar estoque inicial
-- [] Registrar estoque mínimo
-- [] Validar dados
-- [] Salvar o produto no banco de dados
-- [] Demonstrar mensagem de sucesso
+- [x]Registrar o nome do produto
+- [x]Registrar SKU 
+- [x] Registrar categoria
+- [x] Registrar preço
+- [x] Registrar estoque inicial
+- [x] Registrar estoque mínimo
+- [x] Validar dados
+- [x] Salvar o produto no banco de dados
+- [x] Demonstrar mensagem de sucesso
 
 ## Frontend
 

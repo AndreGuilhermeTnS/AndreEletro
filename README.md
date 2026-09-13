@@ -1,28 +1,28 @@
-# AndreEletro
-Logistics and stock control system for small commerces
+**AndreEletro**
 
-## Goals
+Sistema de logística e controle de estoque para pequenos comércios
 
-Register products, stockcontrol and managing requests and purchases
+## Objetivos
 
-#Technology
+Cadastrar produtos, controlar o estoque e gerenciar pedidos e compras.
 
-- React
-- Node.js
-- Express
-- PostgreSQL
-- Git
-- GitHub
+# Tecnologias
 
-#Functionalitys
+* React
+* Node.js
+* Express
+* PostgreSQL
+* Git
+* GitHub
 
-Registering Products
-Stock Control
-Purchases
+# Funcionalidades
 
-Login
-Logout
-CRUD of products
-Stock control
-Requests
-Dashboard
+* Cadastro de produtos
+* Controle de estoque
+* Compras
+* Login
+* Logout
+* CRUD de produtos
+* Controle de estoque
+* Pedidos
+* Dashboard

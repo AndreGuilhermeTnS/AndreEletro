@@ -1,27 +1,34 @@
+
 import { useCallback, useEffect, useState } from "react";
+import Estoque from "./Estoque";
 import "./App.css";
 
 const API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-function App() {
-  // Dados do formulário
-  const [formulario, setFormulario] = useState({
-    nome: "",
-    sku: "",
-    categoria: "",
-    preco: "",
-    estoque_inicial: "",
-    estoque_minimo: ""
-  });
+const formularioVazio = {
+  nome: "",
+  sku: "",
+  categoria: "",
+  preco: "",
+  estoque_inicial: "",
+  estoque_minimo: ""
+};
 
-  // Mensagem de sucesso ou erro
+function App() {
+  // Controla qual tela será exibida
+  const [telaAtual, setTelaAtual] = useState("produtos");
+
+  // Dados do formulário da AC1
+  const [formulario, setFormulario] = useState(formularioVazio);
+
+  // Mensagens de cadastro
   const [mensagem, setMensagem] = useState("");
 
-  // Lista de produtos cadastrados
+  // Produtos armazenados no PostgreSQL
   const [produtos, setProdutos] = useState([]);
 
-  // Busca os produtos cadastrados no backend
+  // Busca os produtos cadastrados
   const carregarProdutos = useCallback(async () => {
     try {
       const resposta = await fetch(`${API_URL}/produtos`);
@@ -31,32 +38,30 @@ function App() {
       }
 
       const dados = await resposta.json();
-
       setProdutos(dados);
+
     } catch (erro) {
       console.error("Erro ao carregar produtos:", erro);
     }
   }, []);
 
-  // Carrega os produtos quando a página abre
   useEffect(() => {
     carregarProdutos();
   }, [carregarProdutos]);
 
-  // Atualiza os campos enquanto o usuário digita
+  // Atualiza os campos do formulário
   const atualizarCampo = (evento) => {
     const { name, value } = evento.target;
 
-    setFormulario({
-      ...formulario,
+    setFormulario((anterior) => ({
+      ...anterior,
       [name]: value
-    });
+    }));
   };
 
-  // Envia o produto para o backend
+  // Cadastra um produto no PostgreSQL
   const cadastrarProduto = async (evento) => {
     evento.preventDefault();
-
     setMensagem("");
 
     try {
@@ -84,22 +89,22 @@ function App() {
 
       setMensagem("Produto cadastrado com sucesso!");
 
-      // Limpa o formulário
-      setFormulario({
-        nome: "",
-        sku: "",
-        categoria: "",
-        preco: "",
-        estoque_inicial: "",
-        estoque_minimo: ""
-      });
+      setFormulario({ ...formularioVazio });
 
-      // Atualiza a tabela de produtos
       await carregarProdutos();
 
     } catch (erro) {
-      setMensagem("Não foi possível conectar ao servidor.");
       console.error(erro);
+      setMensagem("Não foi possível conectar ao servidor.");
+    }
+  };
+
+  const mudarTela = (novaTela) => {
+    setMensagem("");
+    setTelaAtual(novaTela);
+
+    if (novaTela === "produtos") {
+      carregarProdutos();
     }
   };
 
@@ -108,132 +113,174 @@ function App() {
       <div className="card">
 
         <h1>MercadoLog</h1>
-        <h2>Cadastro de Produto</h2>
+        <p className="subtitulo">
+          Sistema de Gestão de Produtos e Estoque
+        </p>
 
-        <form onSubmit={cadastrarProduto}>
-
-          <label htmlFor="nome">Nome do produto</label>
-          <input
-            id="nome"
-            name="nome"
-            value={formulario.nome}
-            onChange={atualizarCampo}
-            placeholder="Ex.: Arroz 5kg"
-            required
-          />
-
-          <label htmlFor="sku">SKU</label>
-          <input
-            id="sku"
-            name="sku"
-            value={formulario.sku}
-            onChange={atualizarCampo}
-            placeholder="Ex.: ARR001"
-            required
-          />
-
-          <label htmlFor="categoria">Categoria</label>
-          <input
-            id="categoria"
-            name="categoria"
-            value={formulario.categoria}
-            onChange={atualizarCampo}
-            placeholder="Ex.: Alimentos"
-            required
-          />
-
-          <label htmlFor="preco">Preço</label>
-          <input
-            id="preco"
-            type="number"
-            step="0.01"
-            min="0.01"
-            name="preco"
-            value={formulario.preco}
-            onChange={atualizarCampo}
-            placeholder="Ex.: 25.90"
-            required
-          />
-
-          <label htmlFor="estoque_inicial">
-            Estoque inicial
-          </label>
-          <input
-            id="estoque_inicial"
-            type="number"
-            min="0"
-            name="estoque_inicial"
-            value={formulario.estoque_inicial}
-            onChange={atualizarCampo}
-            placeholder="Ex.: 20"
-            required
-          />
-
-          <label htmlFor="estoque_minimo">
-            Estoque mínimo
-          </label>
-          <input
-            id="estoque_minimo"
-            type="number"
-            min="0"
-            name="estoque_minimo"
-            value={formulario.estoque_minimo}
-            onChange={atualizarCampo}
-            placeholder="Ex.: 5"
-            required
-          />
-
-          <button type="submit">
-            Cadastrar produto
+        {/* Navegação principal */}
+        <nav className="menu-principal">
+          <button
+            type="button"
+            className={
+              telaAtual === "produtos" ? "ativo" : ""
+            }
+            onClick={() => mudarTela("produtos")}
+          >
+            Cadastro de Produtos
           </button>
 
-        </form>
+          <button
+            type="button"
+            className={
+              telaAtual === "estoque" ? "ativo" : ""
+            }
+            onClick={() => mudarTela("estoque")}
+          >
+            Controle de Estoque
+          </button>
+        </nav>
 
-        {mensagem && (
-          <p className="mensagem">
-            {mensagem}
-          </p>
-        )}
+        {/* Tela de cadastro de produtos - AC1 */}
+        {telaAtual === "produtos" ? (
+          <section className="area-produtos">
 
-        <div className="lista-produtos">
-          <h2>Produtos cadastrados</h2>
+            <h2>Cadastro de Produto — AC1</h2>
 
-          {produtos.length === 0 ? (
-            <p>Nenhum produto cadastrado.</p>
-          ) : (
-            <div className="tabela-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Produto</th>
-                    <th>SKU</th>
-                    <th>Categoria</th>
-                    <th>Preço</th>
-                    <th>Estoque</th>
-                    <th>Estoque mínimo</th>
-                  </tr>
-                </thead>
+            <form onSubmit={cadastrarProduto}>
 
-                <tbody>
-                  {produtos.map((produto) => (
-                    <tr key={produto.id}>
-                      <td>{produto.id}</td>
-                      <td>{produto.nome}</td>
-                      <td>{produto.sku}</td>
-                      <td>{produto.categoria}</td>
-                      <td>
-                        R$ {Number(produto.preco).toFixed(2)}
-                      </td>
-                      <td>{produto.estoque_inicial}</td>
-                      <td>{produto.estoque_minimo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <label htmlFor="nome">Nome do produto</label>
+              <input
+                id="nome"
+                name="nome"
+                value={formulario.nome}
+                onChange={atualizarCampo}
+                placeholder="Ex.: Arroz 5kg"
+                required
+              />
+
+              <label htmlFor="sku">SKU</label>
+              <input
+                id="sku"
+                name="sku"
+                value={formulario.sku}
+                onChange={atualizarCampo}
+                placeholder="Ex.: ARR001"
+                required
+              />
+
+              <label htmlFor="categoria">Categoria</label>
+              <input
+                id="categoria"
+                name="categoria"
+                value={formulario.categoria}
+                onChange={atualizarCampo}
+                placeholder="Ex.: Alimentos"
+                required
+              />
+
+              <label htmlFor="preco">Preço</label>
+              <input
+                id="preco"
+                type="number"
+                step="0.01"
+                min="0.01"
+                name="preco"
+                value={formulario.preco}
+                onChange={atualizarCampo}
+                placeholder="Ex.: 25.90"
+                required
+              />
+
+              <label htmlFor="estoque_inicial">
+                Estoque inicial
+              </label>
+              <input
+                id="estoque_inicial"
+                type="number"
+                min="0"
+                step="1"
+                name="estoque_inicial"
+                value={formulario.estoque_inicial}
+                onChange={atualizarCampo}
+                placeholder="Ex.: 20"
+                required
+              />
+
+              <label htmlFor="estoque_minimo">
+                Estoque mínimo
+              </label>
+              <input
+                id="estoque_minimo"
+                type="number"
+                min="0"
+                step="1"
+                name="estoque_minimo"
+                value={formulario.estoque_minimo}
+                onChange={atualizarCampo}
+                placeholder="Ex.: 5"
+                required
+              />
+
+              <button type="submit">
+                Cadastrar produto
+              </button>
+
+            </form>
+
+            {mensagem && (
+              <p className="mensagem">{mensagem}</p>
+            )}
+
+            <div className="lista-produtos">
+              <h2>Produtos cadastrados</h2>
+
+              {produtos.length === 0 ? (
+                <p>Nenhum produto cadastrado.</p>
+              ) : (
+                <div className="tabela-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Produto</th>
+                        <th>SKU</th>
+                        <th>Categoria</th>
+                        <th>Preço</th>
+                        <th>Estoque atual</th>
+                        <th>Estoque mínimo</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {produtos.map((produto) => (
+                        <tr key={produto.id}>
+                          <td>{produto.id}</td>
+                          <td>{produto.nome}</td>
+                          <td>{produto.sku}</td>
+                          <td>{produto.categoria}</td>
+                          <td>
+                            {Number(produto.preco).toLocaleString(
+                              "pt-BR",
+                              {
+                                style: "currency",
+                                currency: "BRL"
+                              }
+                            )}
+                          </td>
+                          <td>{produto.estoque_atual}</td>
+                          <td>{produto.estoque_minimo}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </section>
+        ) : (
+          /* Tela de movimentações - AC2 */
+          <Estoque />
+        )}
 
       </div>
     </div>

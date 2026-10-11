@@ -80,21 +80,23 @@ app.post("/produtos", async (req, res) => {
         }
 
         const resultado = await pool.query(
-            `
-            INSERT INTO produtos
-            (nome, sku, categoria, preco, estoque_inicial, estoque_minimo)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING *
-            `,
-            [
-                nome,
-                sku,
-                categoria,
-                preco,
-                estoque_inicial,
-                estoque_minimo
-            ]
-        );
+  `
+  INSERT INTO produtos
+    (nome, sku, categoria, preco,
+     estoque_inicial, estoque_minimo, estoque_atual)
+  VALUES ($1, $2, $3, $4, $5, $6, $7)
+  RETURNING *
+  `,
+  [
+    nome,
+    sku,
+    categoria,
+    preco,
+    estoque_inicial,
+    estoque_minimo,
+    estoque_inicial
+  ]
+);
 
         res.status(201).json({
             mensagem: "Produto cadastrado com sucesso!",

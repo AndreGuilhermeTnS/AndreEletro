@@ -226,3 +226,114 @@ tbody tr:hover {
     padding: 16px;
   }
 }
+/* AC3 — Pedidos e Financeiro */
+
+.pedidos-area {
+  margin-top: 20px;
+}
+
+.pedidos-area > p {
+  color: #6b7280;
+}
+
+.pedidos-painel,
+.resumo-financeiro {
+  margin-top: 24px;
+  padding: 24px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.pedidos-painel h3,
+.resumo-financeiro h3 {
+  margin-top: 0;
+}
+
+.pedidos-painel select {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 15px;
+}
+
+.resumo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.resumo-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  padding: 18px;
+  border-radius: 10px;
+}
+
+.resumo-item span,
+.resumo-item small {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.resumo-item strong {
+  font-size: 23px;
+  color: #1f2937;
+  overflow-wrap: anywhere;
+}
+
+.pedido-total {
+  margin-top: 18px;
+  padding: 16px;
+  background: #eef2ff;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.pedido-total strong {
+  font-size: 20px;
+  color: #3730a3;
+}
+
+.observacao-financeira {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.pedidos-painel .acao-pedido {
+  margin: 0;
+  padding: 9px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.mensagem-erro {
+  color: #b91c1c;
+}
+
+@media (max-width: 600px) {
+  .resumo-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pedido-total {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pedidos-painel,
+  .resumo-financeiro {
+    padding: 16px;
+  }
+}
+
+
+export default App;

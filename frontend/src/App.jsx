@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Estoque from "./Estoque";
+import Pedidos from "./Pedidos";
 import "./App.css";
 
 const API_URL =
@@ -138,6 +139,13 @@ function App() {
           >
             Controle de Estoque
           </button>
+          <button
+  type="button"
+  className={telaAtual === "pedidos" ? "ativo" : ""}
+  onClick={() => mudarTela("pedidos")}
+>
+  Pedidos e Financeiro
+</button>
         </nav>
 
         {/* Tela de cadastro de produtos - AC1 */}
@@ -277,9 +285,10 @@ function App() {
               )}
             </div>
           </section>
-        ) : (
-          /* Tela de movimentações - AC2 */
+        ) : telaAtual === "estoque" ? (
           <Estoque />
+        ) : (
+          <Pedidos />
         )}
 
       </div>

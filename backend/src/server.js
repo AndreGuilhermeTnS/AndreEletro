@@ -1,46 +1,87 @@
+
 const express = require("express");
 const cors = require("cors");
 const pool = require("./database");
 
 const app = express();
+const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
 
-const PORT = 3000;
+// ============================================
+// FUNCOES DE VALIDACAO
+// ============================================
 
-function custoMedioValido(valor) {
-    if (typeof valor !== "string" && typeof valor !== "number") {
+const inteiroPositivo = (valor) =>
+    Number.isSafeInteger(valor) &&
+    valor > 0 &&
+    valor <= 2147483647;
+
+const inteiroNaoNegativo = (valor) =>
+    Number.isSafeInteger(valor) &&
+    valor >= 0 &&
+    valor <= 2147483647;
+
+function valorMonetarioValido(valor) {
+    if (
+        typeof valor !== "string" &&
+        typeof valor !== "number"
+    ) {
         return false;
     }
 
-    return /^(?:0|[1-9]\d{0,7})(?:\.\d{1,4})?$/.test(String(valor))
-        && Number(valor) > 0;
+    return /^(?:0|[1-9]\d{0,7})(?:\.\d{1,2})?$/.test(
+        String(valor)
+    ) && Number(valor) > 0;
 }
 
-// Permite que o Express receba JSON
-app.use(express.json());
+function custoMedioValido(valor) {
+    if (
+        typeof valor !== "string" &&
+        typeof valor !== "number"
+    ) {
+        return false;
+    }
+
+    return /^(?:0|[1-9]\d{0,7})(?:\.\d{1,4})?$/.test(
+        String(valor)
+    ) && Number(valor) > 0;
+}
+
+// ============================================
+// ROTA INICIAL
+// ============================================
 
 app.get("/", (req, res) => {
     res.send("MercadoLog API funcionando!");
 });
 
-// Lista todos os produtos
+// ============================================
+// AC1 - CONSULTAR PRODUTOS
+// ============================================
+
 app.get("/produtos", async (req, res) => {
     try {
-        const resultado = await pool.query("SELECT * FROM produtos");
+        const resultado = await pool.query(
+            "SELECT * FROM produtos ORDER BY id"
+        );
 
-        res.json(resultado.rows);
+        return res.status(200).json(resultado.rows);
+
     } catch (erro) {
-        console.error(erro);
+        console.error("Erro ao consultar produtos:", erro);
 
-        res.status(500).json({
-            mensagem: "Erro ao buscar produtos"
+        return res.status(500).json({
+            mensagem: "Erro ao buscar produtos."
         });
     }
 });
 
-// Cadastra um novo produto
+// ============================================
+// AC1 - CADASTRAR PRODUTO
+// ============================================
+
 app.post("/produtos", async (req, res) => {
     try {
         const {
@@ -51,141 +92,221 @@ app.post("/produtos", async (req, res) => {
             estoque_inicial,
             estoque_minimo,
             custo_medio_aquisicao
-        } = req.body;
+        } = req.body || {};
 
-        // Validação dos campos obrigatórios
-        if (!nome || !sku || !categoria) {
-            return res.status(400).json({
-                mensagem: "Nome, SKU e categoria são obrigatórios."
-            });
-        }
-
-        // Validação do preço
-        if (preco === undefined || preco === null || preco <= 0) {
-            return res.status(400).json({
-                mensagem: "O preço deve ser maior que zero."
-            });
-        }
-
-        // Validação do estoque inicial
+        // Validar campos obrigatorios
         if (
-            estoque_inicial === undefined ||
-            estoque_inicial === null ||
-            estoque_inicial < 0
+            typeof nome !== "string" || !nome.trim() ||
+            typeof sku !== "string" || !sku.trim() ||
+            typeof categoria !== "string" || !categoria.trim()
         ) {
             return res.status(400).json({
-                mensagem: "O estoque inicial não pode ser negativo."
+                mensagem:
+                    "Nome, SKU e categoria são obrigatórios."
             });
         }
 
-        // Validação do estoque mínimo
+        // Validar preco de venda
+        if (!valorMonetarioValido(preco)) {
+            return res.status(400).json({
+                mensagem:
+                    "O preço deve ser positivo e ter até 2 casas decimais."
+            });
+        }
+
+        // Validar estoque
         if (
-            estoque_minimo === undefined ||
-            estoque_minimo === null ||
-            estoque_minimo < 0
+            !inteiroNaoNegativo(estoque_inicial) ||
+            !inteiroNaoNegativo(estoque_minimo)
         ) {
             return res.status(400).json({
-                mensagem: "O estoque mínimo não pode ser negativo."
+                mensagem:
+                    "Os estoques devem ser números inteiros não negativos."
             });
         }
 
+        // Custo inicial opcional
         const custoInformado =
             custo_medio_aquisicao !== undefined &&
             custo_medio_aquisicao !== null &&
             custo_medio_aquisicao !== "";
 
-    if (custoInformado && !custoMedioValido(custo_medio_aquisicao)) {
-        return res.status(400).json({
-            mensagem: "Custo médio de aquisição inválido. Deve ser um número positivo com até 4 casas decimais."
-        });
-    }
-  const resultado = await pool.query(
-    `
-    INSERT INTO produtos
-        (
-            nome,
-            sku,
-            categoria,
-            preco,
-            estoque_inicial,
-            estoque_minimo,
-            estoque_atual,
-            custo_medio_aquisicao
-        )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING *
-    `,
-    [
-        nome,
-        sku,
-        categoria,
-        preco,
-        estoque_inicial,
-        estoque_minimo,
-        estoque_inicial,
-        custoInformado ? String(custo_medio_aquisicao) : null
-    ]
-);
+        if (
+            custoInformado &&
+            !custoMedioValido(custo_medio_aquisicao)
+        ) {
+            return res.status(400).json({
+                mensagem:
+                    "Custo de aquisição inválido: use valor positivo com até 4 casas decimais."
+            });
+        }
 
-        res.status(201).json({
+        // Inserir produto no PostgreSQL
+        const resultado = await pool.query(
+            `
+            INSERT INTO produtos
+                (
+                    nome,
+                    sku,
+                    categoria,
+                    preco,
+                    estoque_inicial,
+                    estoque_minimo,
+                    estoque_atual,
+                    custo_medio_aquisicao
+                )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *
+            `,
+            [
+                nome.trim(),
+                sku.trim(),
+                categoria.trim(),
+                String(preco),
+                estoque_inicial,
+                estoque_minimo,
+                estoque_inicial,
+                custoInformado
+                    ? String(custo_medio_aquisicao)
+                    : null
+            ]
+        );
+
+        return res.status(201).json({
             mensagem: "Produto cadastrado com sucesso!",
             produto: resultado.rows[0]
         });
 
     } catch (erro) {
-        console.error(erro);
+        console.error("Erro ao cadastrar produto:", erro);
 
-        // Código de erro do PostgreSQL para valor UNIQUE duplicado
         if (erro.code === "23505") {
             return res.status(400).json({
-                mensagem: "Já existe um produto com esse SKU."
+                mensagem:
+                    "Já existe um produto com esse SKU."
             });
         }
 
-        res.status(500).json({
+        return res.status(500).json({
             mensagem: "Erro ao cadastrar produto."
         });
     }
 });
-// AC2 - Registrar entrada de estoque
-app.post("/movimentacoes", async (req, res) => {
-    const { produto_id, quantidade } = req.body;
 
-    // Validar os dados recebidos
+// ============================================
+// INTEGRACAO FINANCEIRA
+// DEFINIR CUSTO INICIAL DE PRODUTO ANTIGO
+// ============================================
+
+app.patch(
+    "/produtos/:id/custo-inicial",
+    async (req, res) => {
+
+        const id = Number(req.params.id);
+        const custo = req.body?.custo_medio_aquisicao;
+
+        if (
+            !inteiroPositivo(id) ||
+            !custoMedioValido(custo)
+        ) {
+            return res.status(400).json({
+                mensagem:
+                    "Informe um produto válido e custo positivo com até 4 casas decimais."
+            });
+        }
+
+        try {
+            const resultado = await pool.query(
+                `
+                UPDATE produtos
+                SET custo_medio_aquisicao = $1
+                WHERE id = $2
+                  AND custo_medio_aquisicao IS NULL
+                RETURNING
+                    id,
+                    nome,
+                    sku,
+                    preco,
+                    estoque_atual,
+                    custo_medio_aquisicao
+                `,
+                [String(custo), id]
+            );
+
+            if (resultado.rows.length === 0) {
+                const existe = await pool.query(
+                    "SELECT id FROM produtos WHERE id = $1",
+                    [id]
+                );
+
+                return res.status(
+                    existe.rows.length === 0 ? 404 : 409
+                ).json({
+                    mensagem:
+                        existe.rows.length === 0
+                            ? "Produto não encontrado."
+                            : "O custo inicial deste produto já foi registrado."
+                });
+            }
+
+            return res.status(200).json({
+                mensagem:
+                    "Custo inicial registrado com sucesso!",
+                produto: resultado.rows[0]
+            });
+
+        } catch (erro) {
+            console.error(
+                "Erro ao registrar custo inicial:",
+                erro
+            );
+
+            return res.status(500).json({
+                mensagem:
+                    "Erro ao registrar custo inicial."
+            });
+        }
+    }
+);
+
+// ============================================
+// AC2 - REGISTRAR ENTRADA DE ESTOQUE
+// ============================================
+
+app.post("/movimentacoes", async (req, res) => {
+    const {
+        produto_id,
+        quantidade
+    } = req.body || {};
+
     if (
-        !Number.isInteger(produto_id) ||
-        produto_id <= 0 ||
-        !Number.isInteger(quantidade) ||
-        quantidade <= 0
+        !inteiroPositivo(produto_id) ||
+        !inteiroPositivo(quantidade)
     ) {
         return res.status(400).json({
-            mensagem: "Informe um produto válido e uma quantidade inteira maior que zero."
+            mensagem:
+                "Informe um produto válido e uma quantidade inteira maior que zero."
         });
     }
 
-    // Reservar uma conexão com o PostgreSQL
-    const cliente = await pool.connect().catch((erro) => {
-        console.error("Erro de conexão:", erro);
-        return null;
-    });
-
-    if (!cliente) {
-        return res.status(500).json({
-            mensagem: "Não foi possível conectar ao banco de dados."
-        });
-    }
+    let cliente;
 
     try {
-        // Iniciar a transação
+        cliente = await pool.connect();
+
         await cliente.query("BEGIN");
 
-        // Atualizar o estoque do produto
+        // Atualizar quantidade em estoque
         const produto = await cliente.query(
             `
             UPDATE produtos
             SET estoque_atual = estoque_atual + $1
             WHERE id = $2
-            RETURNING id, nome, sku, estoque_atual
+            RETURNING
+                id,
+                nome,
+                sku,
+                estoque_atual
             `,
             [quantidade, produto_id]
         );
@@ -198,7 +319,7 @@ app.post("/movimentacoes", async (req, res) => {
             });
         }
 
-        // Registrar o histórico da entrada
+        // Registrar entrada no historico
         const movimentacao = await cliente.query(
             `
             INSERT INTO movimentacoes_estoque
@@ -209,32 +330,49 @@ app.post("/movimentacoes", async (req, res) => {
             [produto_id, quantidade]
         );
 
-        // Confirmar as duas operações
         await cliente.query("COMMIT");
 
-        res.status(201).json({
-            mensagem: "Entrada de estoque registrada com sucesso!",
+        return res.status(201).json({
+            mensagem:
+                "Entrada de estoque registrada com sucesso!",
             produto: produto.rows[0],
             movimentacao: movimentacao.rows[0]
         });
 
     } catch (erro) {
-        await cliente.query("ROLLBACK");
-        console.error("Erro ao registrar entrada:", erro);
+        if (cliente) {
+            try {
+                await cliente.query("ROLLBACK");
+            } catch (erroRollback) {
+                console.error(erroRollback);
+            }
+        }
 
-        res.status(500).json({
-            mensagem: "Erro ao registrar entrada de estoque."
+        console.error(
+            "Erro ao registrar entrada:",
+            erro
+        );
+
+        return res.status(500).json({
+            mensagem:
+                "Erro ao registrar entrada de estoque."
         });
 
     } finally {
-        // Liberar a conexão
-        cliente.release();
+        if (cliente) {
+            cliente.release();
+        }
     }
 });
-// AC2 - Consultar o histórico de movimentações
+
+// ============================================
+// AC2 - HISTORICO DE MOVIMENTACOES
+// ============================================
+
 app.get("/movimentacoes", async (req, res) => {
     try {
-        const resultado = await pool.query(`
+        const resultado = await pool.query(
+            `
             SELECT
                 m.id,
                 m.produto_id,
@@ -245,11 +383,14 @@ app.get("/movimentacoes", async (req, res) => {
                 m.data_movimentacao
             FROM movimentacoes_estoque m
             INNER JOIN produtos p
-                ON m.produto_id = p.id
-            ORDER BY m.data_movimentacao DESC, m.id DESC
-        `);
+                ON p.id = m.produto_id
+            ORDER BY
+                m.data_movimentacao DESC,
+                m.id DESC
+            `
+        );
 
-        res.status(200).json(resultado.rows);
+        return res.status(200).json(resultado.rows);
 
     } catch (erro) {
         console.error(
@@ -257,73 +398,67 @@ app.get("/movimentacoes", async (req, res) => {
             erro
         );
 
-        res.status(500).json({
-            mensagem: "Erro ao consultar movimentações."
+        return res.status(500).json({
+            mensagem:
+                "Erro ao consultar movimentações."
         });
     }
 });
 
-//
-// AC3 — Cadastrar pedido de reposição
-//
+// ============================================
+// AC3 - CADASTRAR PEDIDO DE REPOSICAO
+// ============================================
+
 app.post("/pedidos", async (req, res) => {
-    try {
-        const {
-            produto_id,
-            quantidade,
-            custo_unitario,
-            forma_pagamento
-        } = req.body;
+    const {
+        produto_id,
+        quantidade,
+        custo_unitario,
+        forma_pagamento
+    } = req.body || {};
 
-        // Validar o produto
-        if (!Number.isInteger(produto_id) || produto_id <= 0) {
-            return res.status(400).json({
-                mensagem: "Informe um produto válido."
-            });
-        }
+    if (!inteiroPositivo(produto_id)) {
+        return res.status(400).json({
+            mensagem: "Informe um produto válido."
+        });
+    }
 
-        // Validar a quantidade
-        if (!Number.isInteger(quantidade) || quantidade <= 0) {
-            return res.status(400).json({
-                mensagem: "A quantidade deve ser um número inteiro maior que zero."
-            });
-        }
+    if (!inteiroPositivo(quantidade)) {
+        return res.status(400).json({
+            mensagem:
+                "A quantidade deve ser inteira e maior que zero."
+        });
+    }
 
-        // Validar o custo unitário
-        const custo = Number(custo_unitario);
+    if (
+        !valorMonetarioValido(custo_unitario) ||
+        Number(quantidade) * Number(custo_unitario) >
+            9999999999.99
+    ) {
+        return res.status(400).json({
+            mensagem:
+                "Custo unitário inválido ou total acima do limite permitido."
+        });
+    }
 
-        if (
-            custo_unitario === null ||
-            custo_unitario === undefined ||
-            custo_unitario === "" ||
-            !Number.isFinite(custo) ||
-            custo <= 0 ||
-            !/^\d+(\.\d{1,2})?$/.test(String(custo_unitario)) ||
-            custo > 99999999.99 ||
-            quantidade * custo > 9999999999.99
-        ) {
-            return res.status(400).json({
-                mensagem: "Informe um custo unitário válido, maior que zero, com até duas casas decimais."
-            });
-        }
-
-        // Formas de pagamento permitidas
-        const formasPermitidas = [
+    if (
+        ![
             "PIX",
             "DINHEIRO",
             "CARTAO",
             "BOLETO"
-        ];
+        ].includes(forma_pagamento)
+    ) {
+        return res.status(400).json({
+            mensagem:
+                "Selecione uma forma de pagamento válida."
+        });
+    }
 
-        if (!formasPermitidas.includes(forma_pagamento)) {
-            return res.status(400).json({
-                mensagem: "Selecione uma forma de pagamento válida."
-            });
-        }
-
-        // Verificar se o produto existe
+    try {
+        // Verificar se produto existe
         const produto = await pool.query(
-            "SELECT id, nome, sku FROM produtos WHERE id = $1",
+            "SELECT id FROM produtos WHERE id = $1",
             [produto_id]
         );
 
@@ -333,43 +468,54 @@ app.post("/pedidos", async (req, res) => {
             });
         }
 
-        // Inserir o pedido.
-        // O PostgreSQL calcula automaticamente valor_total.
+        // Criar pedido de reposicao
         const resultado = await pool.query(
             `
             INSERT INTO pedidos_reposicao
-                (produto_id, quantidade, custo_unitario, forma_pagamento)
+                (
+                    produto_id,
+                    quantidade,
+                    custo_unitario,
+                    forma_pagamento
+                )
             VALUES ($1, $2, $3, $4)
             RETURNING *
             `,
             [
                 produto_id,
                 quantidade,
-                custo_unitario,
+                String(custo_unitario),
                 forma_pagamento
             ]
         );
 
         return res.status(201).json({
-            mensagem: "Pedido de reposição cadastrado com sucesso!",
+            mensagem:
+                "Pedido de reposição cadastrado com sucesso!",
             pedido: resultado.rows[0]
         });
 
     } catch (erro) {
-        console.error("Erro ao cadastrar pedido:", erro);
+        console.error(
+            "Erro ao cadastrar pedido:",
+            erro
+        );
 
         return res.status(500).json({
-            mensagem: "Erro ao cadastrar pedido de reposição."
+            mensagem:
+                "Erro ao cadastrar pedido de reposição."
         });
     }
 });
 
-//
-// AC3 — Consultar pedidos de reposição
-//
+// ============================================
+// AC3 - CONSULTAR PEDIDOS
+// ============================================
+
 app.get("/pedidos", async (req, res) => {
     try {
-        const resultado = await pool.query(`
+        const resultado = await pool.query(
+            `
             SELECT
                 r.id,
                 r.produto_id,
@@ -384,41 +530,568 @@ app.get("/pedidos", async (req, res) => {
             FROM pedidos_reposicao r
             INNER JOIN produtos p
                 ON r.produto_id = p.id
-            ORDER BY r.data_pedido DESC, r.id DESC
+            ORDER BY
+                r.data_pedido DESC,
+                r.id DESC
+            `
+        );
+
+        return res.status(200).json(resultado.rows);
+
+    } catch (erro) {
+        console.error(
+            "Erro ao consultar pedidos:",
+            erro
+        );
+
+        return res.status(500).json({
+            mensagem:
+                "Erro ao consultar pedidos de reposição."
+        });
+    }
+});
+
+// ============================================
+// AC3 - ATUALIZAR STATUS DO PEDIDO
+// E CALCULAR CUSTO MEDIO PONDERADO
+// ============================================
+
+app.patch(
+    "/pedidos/:id/status",
+    async (req, res) => {
+
+        const id = Number(req.params.id);
+        const status = req.body?.status;
+
+        if (!inteiroPositivo(id)) {
+            return res.status(400).json({
+                mensagem: "ID do pedido inválido."
+            });
+        }
+
+        if (
+            !["APROVADO", "RECEBIDO"].includes(status)
+        ) {
+            return res.status(400).json({
+                mensagem: "Status solicitado inválido."
+            });
+        }
+
+        let cliente;
+
+        try {
+            cliente = await pool.connect();
+
+            await cliente.query("BEGIN");
+
+            // Bloquear pedido durante atualizacao
+            const consultaPedido = await cliente.query(
+                `
+                SELECT
+                    id,
+                    produto_id,
+                    quantidade,
+                    custo_unitario,
+                    status
+                FROM pedidos_reposicao
+                WHERE id = $1
+                FOR UPDATE
+                `,
+                [id]
+            );
+
+            if (consultaPedido.rows.length === 0) {
+                await cliente.query("ROLLBACK");
+
+                return res.status(404).json({
+                    mensagem: "Pedido não encontrado."
+                });
+            }
+
+            const pedido = consultaPedido.rows[0];
+
+            // Fluxo permitido:
+            // PENDENTE -> APROVADO -> RECEBIDO
+            const proximoStatus = {
+                PENDENTE: "APROVADO",
+                APROVADO: "RECEBIDO"
+            }[pedido.status];
+
+            if (proximoStatus !== status) {
+                await cliente.query("ROLLBACK");
+
+                return res.status(409).json({
+                    mensagem:
+                        `Não é permitido alterar de ${pedido.status} para ${status}.`
+                });
+            }
+
+            // =================================
+            // RECEBIMENTO DE MERCADORIA
+            // =================================
+
+            if (status === "RECEBIDO") {
+
+                // Consultar e bloquear o produto
+                const consultaProduto =
+                    await cliente.query(
+                        `
+                        SELECT
+                            id,
+                            estoque_atual,
+                            custo_medio_aquisicao
+                        FROM produtos
+                        WHERE id = $1
+                        FOR UPDATE
+                        `,
+                        [pedido.produto_id]
+                    );
+
+                if (
+                    consultaProduto.rows.length === 0
+                ) {
+                    await cliente.query("ROLLBACK");
+
+                    return res.status(404).json({
+                        mensagem:
+                            "Produto vinculado ao pedido não encontrado."
+                    });
+                }
+
+                const produto =
+                    consultaProduto.rows[0];
+
+                // Exigir custo inicial quando
+                // existe estoque antigo sem custo
+                if (
+                    Number(produto.estoque_atual) > 0 &&
+                    produto.custo_medio_aquisicao === null
+                ) {
+                    await cliente.query("ROLLBACK");
+
+                    return res.status(409).json({
+                        mensagem:
+                            "Defina o custo inicial do estoque deste produto antes do recebimento."
+                    });
+                }
+
+                // Calcular media ponderada
+                // usando NUMERIC do PostgreSQL
+                await cliente.query(
+                    `
+                    UPDATE produtos
+                    SET
+                        custo_medio_aquisicao = ROUND(
+                            (
+                                estoque_atual::numeric
+                                * COALESCE(
+                                    custo_medio_aquisicao,
+                                    0
+                                )
+                                + $1::numeric
+                                * $2::numeric
+                            )
+                            /
+                            (
+                                estoque_atual::numeric
+                                + $1::numeric
+                            ),
+                            4
+                        ),
+                        estoque_atual =
+                            estoque_atual + $1
+                    WHERE id = $3
+                    `,
+                    [
+                        pedido.quantidade,
+                        pedido.custo_unitario,
+                        pedido.produto_id
+                    ]
+                );
+
+                // Registrar entrada na AC2
+                await cliente.query(
+                    `
+                    INSERT INTO movimentacoes_estoque
+                        (
+                            produto_id,
+                            tipo,
+                            quantidade
+                        )
+                    VALUES ($1, 'ENTRADA', $2)
+                    `,
+                    [
+                        pedido.produto_id,
+                        pedido.quantidade
+                    ]
+                );
+            }
+
+            // Atualizar status do pedido
+            const resultado = await cliente.query(
+                `
+                UPDATE pedidos_reposicao
+                SET status = $1
+                WHERE id = $2
+                RETURNING *
+                `,
+                [status, id]
+            );
+
+            await cliente.query("COMMIT");
+
+            return res.status(200).json({
+                mensagem:
+                    status === "RECEBIDO"
+                        ? "Pedido recebido, estoque e custo médio atualizados!"
+                        : "Pedido aprovado com sucesso!",
+                pedido: resultado.rows[0]
+            });
+
+        } catch (erro) {
+            if (cliente) {
+                try {
+                    await cliente.query("ROLLBACK");
+                } catch (erroRollback) {
+                    console.error(erroRollback);
+                }
+            }
+
+            console.error(
+                "Erro ao atualizar pedido:",
+                erro
+            );
+
+            return res.status(500).json({
+                mensagem:
+                    "Erro ao atualizar status do pedido."
+            });
+
+        } finally {
+            if (cliente) {
+                cliente.release();
+            }
+        }
+    }
+);
+
+// ============================================
+// AC3 - RESUMO FINANCEIRO
+// ============================================
+
+app.get(
+    "/financeiro/resumo",
+    async (req, res) => {
+
+        try {
+            const resultado = await pool.query(
+                `
+                SELECT
+                    COUNT(*)::integer
+                        AS total_pedidos,
+
+                    COUNT(*) FILTER (
+                        WHERE status = 'PENDENTE'
+                    )::integer
+                        AS pedidos_pendentes,
+
+                    COUNT(*) FILTER (
+                        WHERE status = 'APROVADO'
+                    )::integer
+                        AS pedidos_aprovados,
+
+                    COUNT(*) FILTER (
+                        WHERE status = 'RECEBIDO'
+                    )::integer
+                        AS pedidos_recebidos,
+
+                    COALESCE(
+                        SUM(valor_total),
+                        0
+                    ) AS valor_total_pedidos,
+
+                    COALESCE(
+                        SUM(valor_total) FILTER (
+                            WHERE status = 'PENDENTE'
+                        ),
+                        0
+                    ) AS valor_pendente,
+
+                    COALESCE(
+                        SUM(valor_total) FILTER (
+                            WHERE status = 'APROVADO'
+                        ),
+                        0
+                    ) AS valor_aprovado,
+
+                    COALESCE(
+                        SUM(valor_total) FILTER (
+                            WHERE status = 'RECEBIDO'
+                        ),
+                        0
+                    ) AS valor_recebido
+
+                FROM pedidos_reposicao
+                `
+            );
+
+            return res.status(200).json(
+                resultado.rows[0]
+            );
+
+        } catch (erro) {
+            console.error(
+                "Erro ao consultar financeiro:",
+                erro
+            );
+
+            return res.status(500).json({
+                mensagem:
+                    "Erro ao consultar resumo financeiro."
+            });
+        }
+    }
+);
+
+// ============================================
+// INICIAR SERVIDOR
+// ============================================
+
+app.listen(PORT, () => {
+    console.log(
+        `Servidor rodando em http://localhost:${PORT}`
+    );
+});
+
+//
+// Extra — PEDIDOS DE CLIENTES E VENDAS
+//
+
+// Cadastrar um pedido com vários produtos
+app.post("/pedidos-clientes", async (req, res) => {
+    const { cliente_nome, itens } = req.body || {};
+
+    if (
+        typeof cliente_nome !== "string" ||
+        cliente_nome.trim().length < 2 ||
+        cliente_nome.trim().length > 120
+    ) {
+        return res.status(400).json({
+            mensagem: "Informe um nome de cliente com 2 a 120 caracteres."
+        });
+    }
+
+    if (!Array.isArray(itens) || itens.length < 1 || itens.length > 50) {
+        return res.status(400).json({
+            mensagem: "Informe de 1 a 50 produtos no pedido."
+        });
+    }
+
+    const ids = new Set();
+
+    for (const item of itens) {
+        if (
+            !item ||
+            !inteiroPositivo(item.produto_id) ||
+            !inteiroPositivo(item.quantidade)
+        ) {
+            return res.status(400).json({
+                mensagem: "Cada item precisa de um produto e uma quantidade inteira positiva."
+            });
+        }
+
+        if (ids.has(item.produto_id)) {
+            return res.status(400).json({
+                mensagem: "Não repita o mesmo produto; aumente a quantidade no item existente."
+            });
+        }
+
+        ids.add(item.produto_id);
+    }
+
+    let cliente;
+
+    try {
+        cliente = await pool.connect();
+        await cliente.query("BEGIN");
+
+        // Conferir produtos e preservar seus preços durante o cadastro
+        const encontrados = await cliente.query(
+            `
+            SELECT id, preco
+            FROM produtos
+            WHERE id = ANY($1::integer[])
+            ORDER BY id
+            FOR SHARE
+            `,
+            [[...ids].sort((a, b) => a - b)]
+        );
+
+        if (encontrados.rows.length !== ids.size) {
+            await cliente.query("ROLLBACK");
+
+            return res.status(404).json({
+                mensagem: "Um ou mais produtos não foram encontrados."
+            });
+        }
+
+        if (
+            encontrados.rows.some(
+                (produto) =>
+                    !Number.isFinite(Number(produto.preco)) ||
+                    Number(produto.preco) <= 0 ||
+                    Number(produto.preco) > 99999999.99
+            )
+        ) {
+            await cliente.query("ROLLBACK");
+
+            return res.status(409).json({
+                mensagem: "Um dos produtos não possui preço de venda válido."
+            });
+        }
+
+        // Criar o cabeçalho do pedido
+        const pedido = await cliente.query(
+            `
+            INSERT INTO pedidos_clientes (cliente_nome)
+            VALUES ($1)
+            RETURNING id
+            `,
+            [cliente_nome.trim()]
+        );
+
+        const pedidoId = pedido.rows[0].id;
+
+        // Copiar o preço de venda da AC1 para cada item
+        for (const item of itens) {
+            await cliente.query(
+                `
+                INSERT INTO itens_pedidos_clientes
+                    (pedido_id, produto_id, quantidade, preco_unitario)
+                SELECT $1, p.id, $2, p.preco
+                FROM produtos p
+                WHERE p.id = $3
+                `,
+                [
+                    pedidoId,
+                    item.quantidade,
+                    item.produto_id
+                ]
+            );
+        }
+
+        // Calcular total no PostgreSQL
+        const resultado = await cliente.query(
+            `
+            UPDATE pedidos_clientes
+            SET valor_total = (
+                SELECT COALESCE(SUM(subtotal), 0)
+                FROM itens_pedidos_clientes
+                WHERE pedido_id = $1
+            )
+            WHERE id = $1
+            RETURNING *
+            `,
+            [pedidoId]
+        );
+
+        await cliente.query("COMMIT");
+
+        return res.status(201).json({
+            mensagem: "Pedido do cliente cadastrado com sucesso! Estoque ainda não alterado.",
+            pedido: resultado.rows[0]
+        });
+
+    } catch (erro) {
+        if (cliente) {
+            try {
+                await cliente.query("ROLLBACK");
+            } catch (erroRollback) {
+                console.error("Erro no rollback:", erroRollback);
+            }
+        }
+
+        console.error("Erro ao cadastrar pedido de cliente:", erro);
+
+        if (erro.code === "22003") {
+            return res.status(400).json({
+                mensagem: "Valor do pedido excede o limite permitido."
+            });
+        }
+
+        return res.status(500).json({
+            mensagem: "Erro ao cadastrar pedido do cliente."
+        });
+
+    } finally {
+        if (cliente) cliente.release();
+    }
+});
+
+//
+// Extra — Consultar histórico de pedidos de clientes
+//
+app.get("/pedidos-clientes", async (req, res) => {
+    try {
+        const resultado = await pool.query(`
+            SELECT
+                pc.id,
+                pc.cliente_nome,
+                pc.status,
+                pc.valor_total,
+                pc.criado_em,
+                pc.confirmado_em,
+
+                COALESCE(
+                    JSON_AGG(
+                        JSON_BUILD_OBJECT(
+                            'id', i.id,
+                            'produto_id', i.produto_id,
+                            'produto_nome', p.nome,
+                            'produto_sku', p.sku,
+                            'quantidade', i.quantidade,
+                            'preco_unitario', i.preco_unitario,
+                            'subtotal', i.subtotal,
+                            'custo_medio_confirmacao',
+                            i.custo_medio_confirmacao
+                        )
+                        ORDER BY i.id
+                    ) FILTER (WHERE i.id IS NOT NULL),
+                    '[]'::json
+                ) AS itens
+
+            FROM pedidos_clientes pc
+
+            LEFT JOIN itens_pedidos_clientes i
+                ON i.pedido_id = pc.id
+
+            LEFT JOIN produtos p
+                ON p.id = i.produto_id
+
+            GROUP BY pc.id
+            ORDER BY pc.id DESC
         `);
 
         return res.status(200).json(resultado.rows);
 
     } catch (erro) {
-        console.error("Erro ao consultar pedidos:", erro);
+        console.error("Erro ao consultar pedidos de clientes:", erro);
 
         return res.status(500).json({
-            mensagem: "Erro ao consultar pedidos de reposição."
+            mensagem: "Erro ao consultar pedidos de clientes."
         });
     }
 });
 
 //
-// AC3 — Atualizar status do pedido
+// Extra — Confirmar venda e descontar estoque
 //
-app.patch("/pedidos/:id/status", async (req, res) => {
+app.patch("/pedidos-clientes/:id/confirmar", async (req, res) => {
     const id = Number(req.params.id);
-    const { status } = req.body || {};
 
-    if (!Number.isSafeInteger(id) || id <= 0) {
+    if (!inteiroPositivo(id)) {
         return res.status(400).json({
             mensagem: "ID do pedido inválido."
-        });
-    }
-
-    const transicoes = {
-        PENDENTE: "APROVADO",
-        APROVADO: "RECEBIDO"
-    };
-
-    if (!["APROVADO", "RECEBIDO"].includes(status)) {
-        return res.status(400).json({
-            mensagem: "Status solicitado inválido."
         });
     }
 
@@ -428,11 +1101,11 @@ app.patch("/pedidos/:id/status", async (req, res) => {
         cliente = await pool.connect();
         await cliente.query("BEGIN");
 
-        // Bloqueia o pedido durante a atualização
+        // Bloquear pedido para evitar confirmação duplicada
         const consulta = await cliente.query(
             `
-            SELECT id, produto_id, quantidade, custo_unitario, status
-            FROM pedidos_reposicao
+            SELECT id, status
+            FROM pedidos_clientes
             WHERE id = $1
             FOR UPDATE
             `,
@@ -447,208 +1120,263 @@ app.patch("/pedidos/:id/status", async (req, res) => {
             });
         }
 
-        const pedido = consulta.rows[0];
-
-        // Impede repetir ou pular etapas
-        if (transicoes[pedido.status] !== status) {
+        if (consulta.rows[0].status !== "PENDENTE") {
             await cliente.query("ROLLBACK");
 
             return res.status(409).json({
-                mensagem:
-                    `Não é permitido alterar de ${pedido.status} para ${status}.`
+                mensagem: "Apenas pedidos pendentes podem ser confirmados."
             });
         }
 
-        // Atualiza o status
-        const resultado = await cliente.query(
+        // Consultar os produtos do pedido
+        const itens = await cliente.query(
             `
-            UPDATE pedidos_reposicao
-            SET status = $1
-            WHERE id = $2
-            RETURNING *
+            SELECT
+                i.id,
+                i.produto_id,
+                i.quantidade,
+                p.nome AS produto_nome
+            FROM itens_pedidos_clientes i
+            INNER JOIN produtos p
+                ON p.id = i.produto_id
+            WHERE i.pedido_id = $1
+            ORDER BY i.produto_id
             `,
-            [status, id]
+            [id]
         );
 
-        // Quando recebido, atualiza estoque e histórico da AC2
-        
-if (status === "RECEBIDO") {
+        if (itens.rows.length === 0) {
+            await cliente.query("ROLLBACK");
 
-    // Bloquear o produto para calcular sobre o saldo correto
-    const consultaProduto = await cliente.query(
-        `
-        SELECT id, estoque_atual, custo_medio_aquisicao
-        FROM produtos
-        WHERE id = $1
-        FOR UPDATE
-        `,
-        [pedido.produto_id]
-    );
+            return res.status(409).json({
+                mensagem: "O pedido não possui produtos."
+            });
+        }
 
-    if (consultaProduto.rows.length === 0) {
-        throw new Error("Produto associado ao pedido não encontrado.");
-    }
+        // Processar cada produto na mesma transação
+        for (const item of itens.rows) {
+            const atualizado = await cliente.query(
+                `
+                UPDATE produtos
+                SET estoque_atual = estoque_atual - $1
+                WHERE id = $2
+                  AND estoque_atual >= $1
+                RETURNING custo_medio_aquisicao
+                `,
+                [item.quantidade, item.produto_id]
+            );
 
-    const produtoAtual = consultaProduto.rows[0];
+            if (atualizado.rows.length === 0) {
+                await cliente.query("ROLLBACK");
 
-    // Não presumir custo para mercadorias antigas
-    if (
-        Number(produtoAtual.estoque_atual) > 0 &&
-        produtoAtual.custo_medio_aquisicao === null
-    ) {
-        await cliente.query("ROLLBACK");
+                return res.status(409).json({
+                    mensagem:
+                        `Estoque insuficiente para ${item.produto_nome}. Nenhum item foi descontado.`
+                });
+            }
 
-        return res.status(409).json({
-            mensagem:
-                "Informe primeiro o custo inicial do estoque deste produto na AC1."
+            // Guardar custo médio conhecido na confirmação
+            await cliente.query(
+                `
+                UPDATE itens_pedidos_clientes
+                SET custo_medio_confirmacao = $1
+                WHERE id = $2
+                `,
+                [
+                    atualizado.rows[0].custo_medio_aquisicao,
+                    item.id
+                ]
+            );
+
+            // Registrar saída no histórico da AC2
+            await cliente.query(
+                `
+                INSERT INTO movimentacoes_estoque
+                    (produto_id, tipo, quantidade)
+                VALUES ($1, 'SAIDA', $2)
+                `,
+                [item.produto_id, item.quantidade]
+            );
+        }
+
+        // Marcar pedido como confirmado
+        const confirmado = await cliente.query(
+            `
+            UPDATE pedidos_clientes
+            SET
+                status = 'CONFIRMADO',
+                confirmado_em = CURRENT_TIMESTAMP
+            WHERE id = $1
+            RETURNING *
+            `,
+            [id]
+        );
+
+        await cliente.query("COMMIT");
+
+        return res.status(200).json({
+            mensagem: "Venda confirmada e estoque atualizado com sucesso!",
+            pedido: confirmado.rows[0]
         });
-    }
-
-    // Calcular a média ponderada e atualizar o estoque
-    await cliente.query(
-        `
-        UPDATE produtos
-        SET
-            custo_medio_aquisicao = ROUND(
-                (
-                    estoque_atual::numeric
-                    * COALESCE(custo_medio_aquisicao, 0)
-                    + $1::numeric * $2::numeric
-                )
-                / (estoque_atual::numeric + $1::numeric),
-                4
-            ),
-            estoque_atual = estoque_atual + $1
-        WHERE id = $3
-        `,
-        [
-            pedido.quantidade,
-            pedido.custo_unitario,
-            pedido.produto_id
-        ]
-    );
-
-    // Registrar a entrada no histórico da AC2
-    await cliente.query(
-        `
-        INSERT INTO movimentacoes_estoque
-            (produto_id, tipo, quantidade)
-        VALUES ($1, 'ENTRADA', $2)
-        `,
-        [pedido.produto_id, pedido.quantidade]
-    );
-}
-
-//
-// AC3 — Resumo financeiro das reposições
-//
-app.get("/financeiro/resumo", async (req, res) => {
-    try {
-        const resultado = await pool.query(`
-            SELECT
-                COUNT(*)::INTEGER AS total_pedidos,
-
-                COUNT(*) FILTER (
-                    WHERE status = 'PENDENTE'
-                )::INTEGER AS pedidos_pendentes,
-
-                COUNT(*) FILTER (
-                    WHERE status = 'APROVADO'
-                )::INTEGER AS pedidos_aprovados,
-
-                COUNT(*) FILTER (
-                    WHERE status = 'RECEBIDO'
-                )::INTEGER AS pedidos_recebidos,
-
-                COALESCE(SUM(valor_total), 0)
-                    AS valor_total_pedidos,
-
-                COALESCE(SUM(valor_total) FILTER (
-                    WHERE status = 'PENDENTE'
-                ), 0) AS valor_pendente,
-
-                COALESCE(SUM(valor_total) FILTER (
-                    WHERE status = 'APROVADO'
-                ), 0) AS valor_aprovado,
-
-                COALESCE(SUM(valor_total) FILTER (
-                    WHERE status = 'RECEBIDO'
-                ), 0) AS valor_recebido
-
-            FROM pedidos_reposicao
-        `);
-
-        return res.status(200).json(resultado.rows[0]);
 
     } catch (erro) {
-        console.error("Erro ao consultar financeiro:", erro);
+        if (cliente) {
+            try {
+                await cliente.query("ROLLBACK");
+            } catch (erroRollback) {
+                console.error("Erro no rollback:", erroRollback);
+            }
+        }
+
+        console.error("Erro ao confirmar venda:", erro);
 
         return res.status(500).json({
-            mensagem: "Erro ao consultar resumo financeiro."
+            mensagem: "Erro ao confirmar venda."
         });
+
+    } finally {
+        if (cliente) cliente.release();
     }
 });
 
-
 //
-// Integração financeira — Definir custo inicial do produto
+// Extra — Cancelar pedido pendente
 //
-app.patch("/produtos/:id/custo-inicial", async (req, res) => {
+app.patch("/pedidos-clientes/:id/cancelar", async (req, res) => {
     const id = Number(req.params.id);
-    const custo = req.body?.custo_medio_aquisicao;
 
-    if (
-        !Number.isSafeInteger(id) ||
-        id <= 0 ||
-        !custoMedioValido(custo)
-    ) {
+    if (!inteiroPositivo(id)) {
         return res.status(400).json({
-            mensagem: "Informe um ID e custo de aquisição válidos (até 4 casas decimais)."
+            mensagem: "ID do pedido inválido."
         });
     }
 
     try {
         const resultado = await pool.query(
             `
-            UPDATE produtos
-            SET custo_medio_aquisicao = $1
-            WHERE id = $2
-              AND custo_medio_aquisicao IS NULL
-            RETURNING id, nome, sku, preco,
-                      estoque_atual, custo_medio_aquisicao
+            UPDATE pedidos_clientes
+            SET status = 'CANCELADO'
+            WHERE id = $1
+              AND status = 'PENDENTE'
+            RETURNING *
             `,
-            [String(custo), id]
+            [id]
         );
 
         if (resultado.rows.length === 0) {
-            const existente = await pool.query(
-                "SELECT id FROM produtos WHERE id = $1",
+            const existe = await pool.query(
+                "SELECT status FROM pedidos_clientes WHERE id = $1",
                 [id]
             );
 
             return res.status(
-                existente.rows.length === 0 ? 404 : 409
+                existe.rows.length === 0 ? 404 : 409
             ).json({
-                mensagem: existente.rows.length === 0
-                    ? "Produto não encontrado."
-                    : "Este produto já possui um custo inicial registrado."
+                mensagem:
+                    existe.rows.length === 0
+                        ? "Pedido não encontrado."
+                        : "Apenas pedidos pendentes podem ser cancelados."
             });
         }
 
         return res.status(200).json({
-            mensagem: "Custo inicial registrado com sucesso!",
-            produto: resultado.rows[0]
+            mensagem: "Pedido cancelado sem alteração do estoque.",
+            pedido: resultado.rows[0]
         });
 
     } catch (erro) {
-        console.error("Erro ao registrar custo inicial:", erro);
+        console.error("Erro ao cancelar pedido:", erro);
 
         return res.status(500).json({
-            mensagem: "Erro ao registrar custo inicial."
+            mensagem: "Erro ao cancelar pedido."
         });
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+//
+// Extra — Resumo financeiro de vendas
+//
+app.get("/vendas/resumo", async (req, res) => {
+    try {
+        const resultado = await pool.query(`
+            WITH vendas AS (
+                SELECT
+                    COUNT(*)::integer AS total_pedidos,
+
+                    COUNT(*) FILTER (
+                        WHERE status = 'PENDENTE'
+                    )::integer AS pedidos_pendentes,
+
+                    COUNT(*) FILTER (
+                        WHERE status = 'CONFIRMADO'
+                    )::integer AS pedidos_confirmados,
+
+                    COUNT(*) FILTER (
+                        WHERE status = 'CANCELADO'
+                    )::integer AS pedidos_cancelados,
+
+                    COALESCE(
+                        SUM(valor_total) FILTER (
+                            WHERE status = 'CONFIRMADO'
+                        ),
+                        0
+                    ) AS faturamento_confirmado
+
+                FROM pedidos_clientes
+            ),
+
+            custos AS (
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE pc.status = 'CONFIRMADO'
+                          AND i.custo_medio_confirmacao IS NULL
+                    )::integer AS itens_sem_custo,
+
+                    COALESCE(
+                        SUM(i.subtotal) FILTER (
+                            WHERE pc.status = 'CONFIRMADO'
+                              AND i.custo_medio_confirmacao IS NOT NULL
+                        ),
+                        0
+                    ) AS receita_com_custo_conhecido,
+
+                    COALESCE(
+                        SUM(
+                            i.quantidade * i.custo_medio_confirmacao
+                        ) FILTER (
+                            WHERE pc.status = 'CONFIRMADO'
+                        ),
+                        0
+                    ) AS custo_estimado_conhecido
+
+                FROM itens_pedidos_clientes i
+
+                JOIN pedidos_clientes pc
+                    ON pc.id = i.pedido_id
+            )
+
+            SELECT
+                v.*,
+                c.itens_sem_custo,
+                c.receita_com_custo_conhecido,
+                c.custo_estimado_conhecido,
+
+                (
+                    c.receita_com_custo_conhecido
+                    - c.custo_estimado_conhecido
+                ) AS margem_bruta_estimada_parcial
+
+            FROM vendas v
+            CROSS JOIN custos c
+        `);
+
+        return res.status(200).json(resultado.rows[0]);
+
+    } catch (erro) {
+        console.error("Erro ao consultar resumo de vendas:", erro);
+
+        return res.status(500).json({
+            mensagem: "Erro ao consultar resumo de vendas."
+        });
+    }
 });

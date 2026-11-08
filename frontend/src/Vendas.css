@@ -1,0 +1,29 @@
+/* Extra — Pedidos de clientes e vendas */
+.vendas-area { margin-top: 20px; }
+.vendas-area > p { color: #6b7280; }
+.vendas-painel { margin-top: 24px; padding: 24px; background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; }
+.vendas-painel h3 { margin-top: 0; }
+.vendas-painel h4 { margin: 20px 0 10px; }
+.vendas-resumo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.vendas-indicador { display: flex; flex-direction: column; gap: 8px; background: white; border: 1px solid #e5e7eb; padding: 18px; border-radius: 10px; }
+.vendas-indicador span, .vendas-indicador small { font-size: 13px; color: #6b7280; }
+.vendas-indicador strong { font-size: 22px; overflow-wrap: anywhere; }
+.vendas-observacao { color: #6b7280; font-size: 12px; margin-top: 14px; }
+.vendas-seletor { display: grid; grid-template-columns: minmax(0, 3fr) minmax(110px, 1fr); gap: 12px; align-items: end; }
+.vendas-seletor > div { min-width: 0; }
+.vendas-seletor select { width: 100%; }
+.vendas-detalhe { background: #eef2ff; border-radius: 8px; padding: 12px; }
+.vendas-total { margin-top: 16px; padding: 16px; background: #eef2ff; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.vendas-total strong { font-size: 22px; }
+.vendas-quantidade-tabela { width: 85px !important; min-width: 65px; margin: 0 !important; }
+.vendas-remover, .vendas-cancelar { padding: 8px 12px; margin: 0; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 7px; cursor: pointer; }
+.vendas-acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.vendas-acoes button { margin: 0; white-space: nowrap; }
+.vendas-item-historico { margin-bottom: 4px; white-space: nowrap; }
+.vendas-area .mensagem-erro { color: #b91c1c; }
+.vendas-area button:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 650px) {
+  .vendas-painel { padding: 16px; }
+  .vendas-resumo-grid, .vendas-seletor { grid-template-columns: 1fr; }
+  .vendas-total { flex-direction: column; align-items: flex-start; }
+}
